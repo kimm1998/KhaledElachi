@@ -1,0 +1,32 @@
+{
+  "id": "3830dfe3-b827-4dd2-bf9a-078a5750bb06",
+  "name": ".",
+  "publisher": "Default Publisher",
+  "version": "1.0.0.15",
+  "brief": "",
+  "description": "",
+  "privacyStatement": "",
+  "EULA": "",
+  "help": "",
+  "url": "",
+  "logo": "",
+  "dependencies": [],
+  "screenshots": [],
+  "platform": "1.0.0.0",
+  "application": "27.0.0.0",
+  "idRanges": [
+    {
+      "from": 80000,
+      "to": 80149
+    }
+  ],
+  "resourceExposurePolicy": {
+    "allowDebugging": true,
+    "allowDownloadingSource": false,
+    "includeSourceInSymbolFile": true
+  },
+  "runtime": "16.1",
+  "features": [
+    "NoImplicitWith"
+  ]
+}
