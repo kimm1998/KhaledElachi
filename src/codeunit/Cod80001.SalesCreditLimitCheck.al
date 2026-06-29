@@ -149,11 +149,17 @@ codeunit 80001 "Sales Credit Limit Check"
     var
         Exposure: Decimal;
         SalesCreditLimitMgmt: Codeunit "Sales Credit Limit Mgmt.";
+        Exchrate: Record "Currency Exchange Rate";
+        AmtIncludingVATLCY: Decimal;
         
     begin
         Exposure := 0;
         CalcOverdueBalance(salesheader);
         salesheader.CalcFields("Customer Balance", "Credit Limit", "Amount Including VAT");
+        if salesheader."Currency Code" <> '' then
+            AmtIncludingVATLCY := exchrate.ExchangeAmtFCYToLCY(salesheader."Posting Date", salesheader."Currency Code", salesheader."Amount Including VAT", salesheader."Currency Factor")
+        else
+            AmtIncludingVATLCY := salesheader."Amount Including VAT";
         if salesheader."Credit Limit" = 0 then begin
             if salesheader."Customer Balance" > 0 then
                 salesheader."Balance Exceeds Credit Limit" := true
@@ -166,7 +172,7 @@ codeunit 80001 "Sales Credit Limit Check"
             salesheader."Overdue Exceeded" := false;
 
 
-        if (salesheader."Customer Balance" + salesheader."Amount Including VAT") > salesheader."Credit Limit" then
+        if (salesheader."Customer Balance" + AmtIncludingVATLCY) > salesheader."Credit Limit" then
             salesheader."Balance Exceeds Credit Limit" := true
         else
             salesheader."Balance Exceeds Credit Limit" := false;
@@ -174,7 +180,7 @@ codeunit 80001 "Sales Credit Limit Check"
         Exposure := SalesCreditLimitMgmt.CalcExposureLCY(SalesHeader."Bill-to Customer No.");
         salesheader.Exposure := Exposure;
         if salesheader."Credit Limit" <> 0 then
-            if (Exposure + salesheader."Amount Including VAT") > salesheader."Credit Limit" then
+            if (Exposure + AmtIncludingVATLCY) > salesheader."Credit Limit" then
                 salesheader."Exposure Exceeds Credit Limit" := true
             else
                 salesheader."Exposure Exceeds Credit Limit" := false;

@@ -63,10 +63,10 @@ table 80000 "INT Approval Request"
         }
 
         // Idempotency key: prevents duplicate requests for same document.
-        key(DocKey; "Document Type", "Document No.")
-        {
-            Unique = true;
-        }
+        // key(DocKey; "Document Type", "Document No.")
+        // {
+        //     Unique = true;
+        // }
     }
 
     trigger OnInsert()

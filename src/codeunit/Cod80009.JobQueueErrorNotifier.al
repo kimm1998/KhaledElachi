@@ -78,6 +78,6 @@ codeunit 80009 "Job Queue Error Notifier"
 
     local procedure GetRecipientEmail(): Text
     begin
-        exit('Riad.rifai@greenbridge.co');
+        exit('Riad.rifai@greenbridge.co');//TODO: open a new field for this
     end;
 }

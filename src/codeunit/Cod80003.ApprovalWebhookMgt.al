@@ -80,14 +80,18 @@ codeunit 80003 "Approval Webhook Mgt."
 
         end;
     end;
+
     local procedure BuildJson(ApprovalEntry: Record "Approval Entry"): Text
     var
         JObject: JsonObject;
         JsonText: Text;
+        CompInfo: record "Company Information";
     begin
+        compInfo.Get();
         JObject.Add('authToken', '8f3c1a9d-6b72-4c5e-91a0-3d7f2c9e5b44');
         JObject.Add('orderNo', ApprovalEntry."Document No.");
         JObject.Add('approver', ApprovalEntry."Approver ID");
+        JObject.Add('entity', compinfo."API Country");
 
         JObject.WriteTo(JsonText);
         exit(JsonText);
