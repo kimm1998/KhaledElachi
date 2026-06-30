@@ -27,7 +27,7 @@ pageextension 80000 "Sales Order Credit Ext." extends "Sales Order"
                 }
             }
         }
-        addafter("Payment Terms Code")
+        addafter("Payment Terms Code")//installemnt
         {
             field("Installment Code"; Rec."Installment Code")
             {
@@ -36,7 +36,7 @@ pageextension 80000 "Sales Order Credit Ext." extends "Sales Order"
                 ToolTip = 'Specifies the installment schedule for this sale.';
             }
         }
-        modify("Payment Terms Code")
+        modify("Payment Terms Code")//installemnt
         {
             trigger OnAfterValidate()
             var

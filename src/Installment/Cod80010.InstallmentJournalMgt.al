@@ -1,12 +1,13 @@
 codeunit 80010 "Installment Journal Mgt."
 {
-    Permissions = TableData "Installment Payment Terms" = R,
-                  TableData "Installment Terms Line" = R,
-                  TableData "Cust. Ledger Entry" = RM,
-                  TableData "Sales Invoice Header" = RM,
+    Permissions = TableData "Installment Payment Terms" = RMID,
+                  TableData "Installment Terms Line" = RMID,
+                  TableData "Cust. Ledger Entry" = RMID,
+                  TableData "Detailed Cust. Ledg. Entry" = RMID,
+                  TableData "Sales Invoice Header" = RMID,
                   TableData "Gen. Journal Line" = RIMD,
                   TableData "Gen. Journal Batch" = RIMD,
-                  TableData "Gen. Journal Template" = R;
+                  TableData "Gen. Journal Template" = RMID;
 
     procedure ApplyToPostedInvoice(InvoiceNo: Code[20]; CustomerNo: Code[20]; InstallmentCode: Code[20]; FromPosting: Boolean)
     var

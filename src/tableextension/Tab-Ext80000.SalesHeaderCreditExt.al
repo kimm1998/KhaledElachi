@@ -70,7 +70,7 @@ tableextension 80000 "Sales Header Credit Ext." extends "Sales Header"
             Caption = 'Exposure (LCY)';
             Editable = false;
         }
-        field(80010; "Installment Code"; Code[20])
+        field(80010; "Installment Code"; Code[20])//installemnt
         {
             Caption = 'Installment Code';
             TableRelation = "Installment Payment Terms".Code;
