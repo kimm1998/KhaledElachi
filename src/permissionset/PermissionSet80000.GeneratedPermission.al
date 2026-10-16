@@ -34,5 +34,9 @@ permissionset 80000 GeneratedPermission
         page "Installment Payment Terms Card"=X,
         page "Installment Preview Lines"=X,
         page "Installment Schedule FactBox"=X,
-        page "Installment Terms Subpage"=X;
+        page "Installment Terms Subpage"=X,
+        codeunit "Order Appr. Request Webhook"=X,
+        tabledata "Approval Webhook Log"=RIMD,
+        table "Approval Webhook Log"=X,
+        page "Approval Webhook Log"=X;
 }

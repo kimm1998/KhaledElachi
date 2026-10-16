@@ -1,12 +1,16 @@
 codeunit 80014 "Order Appr. Request Webhook"
 {
     // Posts sales order approval requests to the Google Apps Script endpoint.
-    // Failures are silent by design (they never block the approval request).
+    // Every attempt is written to "Approval Webhook Log".
+    // Failures are silent for the automatic trigger (they never block the approval request).
+
+    Permissions = tabledata "Approval Webhook Log" = RIMD;
 
     [EventSubscriber(ObjectType::Table, Database::"Approval Entry", 'OnAfterInsertEvent', '', false, false)]
     local procedure OnAfterInsertApprovalEntry(var Rec: Record "Approval Entry"; RunTrigger: Boolean)
     var
         SalesHeader: Record "Sales Header";
+        LogEntryNo: Integer;
     begin
         if Rec.IsTemporary() then
             exit;
@@ -20,11 +24,67 @@ codeunit 80014 "Order Appr. Request Webhook"
         if not SalesHeader.Get(SalesHeader."Document Type"::Order, Rec."Document No.") then
             exit;
 
-        if TrySendRequest(SalesHeader, Rec) then;
+        LogEntryNo := Dispatch(SalesHeader, Rec, Enum::"Approval Webhook Trigger"::Automatic);
+    end;
+
+    /// <summary>
+    /// Sends an existing sales order approval entry to the webhook again (manual action).
+    /// </summary>
+    procedure ResendForApprovalEntry(ApprovalEntry: Record "Approval Entry")
+    var
+        SalesHeader: Record "Sales Header";
+    begin
+        if (ApprovalEntry."Table ID" <> Database::"Sales Header") or
+           (ApprovalEntry."Document Type" <> ApprovalEntry."Document Type"::Order)
+        then
+            Error(NotSalesOrderErr);
+        if not SalesHeader.Get(SalesHeader."Document Type"::Order, ApprovalEntry."Document No.") then
+            Error(OrderNotFoundErr, ApprovalEntry."Document No.");
+        if not Confirm(ConfirmResendQst, false, SalesHeader."No.") then
+            exit;
+
+        ShowResult(Dispatch(SalesHeader, ApprovalEntry, Enum::"Approval Webhook Trigger"::"Manual Resend"));
+    end;
+
+    /// <summary>
+    /// Sends a sales order to the webhook without needing an approval request (manual test).
+    /// </summary>
+    procedure SendTestForOrder(SalesHeader: Record "Sales Header")
+    var
+        EmptyApprovalEntry: Record "Approval Entry";
+    begin
+        if SalesHeader."Document Type" <> SalesHeader."Document Type"::Order then
+            Error(NotSalesOrderErr);
+        if not Confirm(ConfirmTestQst, false, SalesHeader."No.") then
+            exit;
+
+        ShowResult(Dispatch(SalesHeader, EmptyApprovalEntry, Enum::"Approval Webhook Trigger"::"Manual Test"));
+    end;
+
+    /// <summary>
+    /// Builds and sends the request, writes the log entry and returns its entry no. (0 if the log could not be written).
+    /// </summary>
+    local procedure Dispatch(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"; TriggerType: Enum "Approval Webhook Trigger"): Integer
+    var
+        LogBody: Text;
+        ResponseText: Text;
+        ErrorText: Text;
+        StatusCode: Integer;
+        Success: Boolean;
+    begin
+        ClearLastError();
+        if TryBuildAndSend(SalesHeader, ApprovalEntry, LogBody, StatusCode, ResponseText) then begin
+            Success := (StatusCode >= 200) and (StatusCode < 300);
+            if not Success then
+                ErrorText := StrSubstNo(HttpErrorTxt, StatusCode);
+        end else
+            ErrorText := GetLastErrorText();
+
+        exit(WriteLog(SalesHeader, ApprovalEntry, TriggerType, Success, StatusCode, ErrorText, LogBody, ResponseText));
     end;
 
     [TryFunction]
-    local procedure TrySendRequest(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry")
+    local procedure TryBuildAndSend(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"; var LogBody: Text; var StatusCode: Integer; var ResponseText: Text)
     var
         HttpClient: HttpClient;
         HttpRequestMessage: HttpRequestMessage;
@@ -32,10 +92,13 @@ codeunit 80014 "Order Appr. Request Webhook"
         HttpContent: HttpContent;
         HttpHeaders: HttpHeaders;
         WebhookUrl: Text;
+        RequestBody: Text;
     begin
         WebhookUrl := 'https://script.google.com/macros/s/AKfycbyooTRNZL1GdtJyds6JaryXkY8Hf_ZWZprWEHLiZUj3aTFwU-AGbmeFAYtvSYIPJ1Uu/exec';
 
-        HttpContent.WriteFrom(BuildJson(SalesHeader, ApprovalEntry));
+        RequestBody := BuildJson(SalesHeader, ApprovalEntry, LogBody);
+
+        HttpContent.WriteFrom(RequestBody);
         HttpContent.GetHeaders(HttpHeaders);
         HttpHeaders.Clear();
         HttpHeaders.Add('Content-Type', 'application/json');
@@ -44,15 +107,58 @@ codeunit 80014 "Order Appr. Request Webhook"
         HttpRequestMessage.SetRequestUri(WebhookUrl);
         HttpRequestMessage.Content := HttpContent;
 
-        if HttpClient.Send(HttpRequestMessage, HttpResponseMessage) then;
+        if not HttpClient.Send(HttpRequestMessage, HttpResponseMessage) then
+            Error(ConnectionFailedErr);
+
+        StatusCode := HttpResponseMessage.HttpStatusCode();
+        HttpResponseMessage.Content().ReadAs(ResponseText);
     end;
 
-    local procedure BuildJson(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
+    local procedure WriteLog(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"; TriggerType: Enum "Approval Webhook Trigger"; Success: Boolean; StatusCode: Integer; ErrorText: Text; LogBody: Text; ResponseText: Text): Integer
+    var
+        LogEntry: Record "Approval Webhook Log";
+    begin
+        LogEntry.Init();
+        LogEntry."Created At" := CurrentDateTime();
+        LogEntry."User ID" := CopyStr(UserId(), 1, MaxStrLen(LogEntry."User ID"));
+        LogEntry."Trigger Type" := TriggerType;
+        LogEntry."Order No." := SalesHeader."No.";
+        LogEntry."Approval Entry No." := ApprovalEntry."Entry No.";
+        LogEntry.Success := Success;
+        LogEntry."HTTP Status Code" := StatusCode;
+        LogEntry."Error Message" := CopyStr(ErrorText, 1, MaxStrLen(LogEntry."Error Message"));
+        LogEntry.SetRequestBody(LogBody);
+        LogEntry.SetResponseBody(ResponseText);
+        if LogEntry.Insert() then
+            exit(LogEntry."Entry No.");
+        exit(0);
+    end;
+
+    local procedure ShowResult(LogEntryNo: Integer)
+    var
+        LogEntry: Record "Approval Webhook Log";
+    begin
+        if (LogEntryNo = 0) or not LogEntry.Get(LogEntryNo) then begin
+            Message(NoLogEntryMsg);
+            exit;
+        end;
+
+        if LogEntry.Success then
+            Message(SuccessMsg, LogEntry."HTTP Status Code", LogEntry."Entry No.")
+        else
+            Message(FailedMsg, LogEntry."Error Message", LogEntry."Entry No.");
+    end;
+
+    /// <summary>
+    /// Builds the request body. LogBody receives the same JSON with the auth token masked, so it is safe to store.
+    /// </summary>
+    local procedure BuildJson(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"; var LogBody: Text): Text
     var
         Customer: Record Customer;
         CompanyInfo: Record "Company Information";
         CreditLimitMgmt: Codeunit "Sales Credit Limit Mgmt.";
         JObject: JsonObject;
+        JLog: JsonObject;
         JData: JsonObject;
         JsonText: Text;
         CustomerNo: Code[20];
@@ -64,7 +170,7 @@ codeunit 80014 "Order Appr. Request Webhook"
         if CustomerNo = '' then
             CustomerNo := SalesHeader."Sell-to Customer No.";
 
-        JData.Add('orderLink', GetApprovalLink(ApprovalEntry));
+        JData.Add('orderLink', GetApprovalLink(SalesHeader, ApprovalEntry));
         JData.Add('orderNumber', SalesHeader."No.");
         JData.Add('customerName', SalesHeader."Sell-to Customer Name");
         JData.Add('customerNumber', SalesHeader."Sell-to Customer No.");
@@ -92,6 +198,12 @@ codeunit 80014 "Order Appr. Request Webhook"
         JObject.Add('data', JData);
 
         JObject.WriteTo(JsonText);
+
+        // Same payload for the log, but with the token masked.
+        JLog := JObject.Clone().AsObject();
+        JLog.Replace('authToken', '***');
+        JLog.WriteTo(LogBody);
+
         exit(JsonText);
     end;
 
@@ -173,11 +285,19 @@ codeunit 80014 "Order Appr. Request Webhook"
 
     /// <summary>
     /// Direct web client link to the approval request entry, so the approver can approve straight away.
+    /// When there is no approval entry (manual test) it falls back to the sales order page.
     /// </summary>
-    local procedure GetApprovalLink(ApprovalEntry: Record "Approval Entry"): Text
+    local procedure GetApprovalLink(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
     var
         ApprovalEntryFilter: Record "Approval Entry";
+        SalesHeaderFilter: Record "Sales Header";
     begin
+        if ApprovalEntry."Entry No." = 0 then begin
+            SalesHeaderFilter.SetRange("Document Type", SalesHeader."Document Type");
+            SalesHeaderFilter.SetRange("No.", SalesHeader."No.");
+            exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Sales Order", SalesHeaderFilter, true));
+        end;
+
         ApprovalEntryFilter.SetRange("Entry No.", ApprovalEntry."Entry No.");
         exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Approval Request Entries", ApprovalEntryFilter, true));
     end;
@@ -187,4 +307,13 @@ codeunit 80014 "Order Appr. Request Webhook"
         ExposureExceedsTxt: Label 'Exposure exceeds credit limit';
         BalanceExceedsTxt: Label 'Balance exceeds credit limit';
         ManualRequestTxt: Label 'Manual approval request';
+        ConnectionFailedErr: Label 'The request could not be sent (no response from the endpoint).';
+        HttpErrorTxt: Label 'The endpoint returned HTTP status %1.', Comment = '%1 = HTTP status code';
+        NotSalesOrderErr: Label 'This action only works for sales orders.';
+        OrderNotFoundErr: Label 'Sales order %1 was not found.', Comment = '%1 = order no.';
+        ConfirmResendQst: Label 'Send the approval request for sales order %1 to the webhook again?', Comment = '%1 = order no.';
+        ConfirmTestQst: Label 'This sends sales order %1 to the live webhook as a test, without creating an approval request. Continue?', Comment = '%1 = order no.';
+        SuccessMsg: Label 'Sent successfully (HTTP %1). Log entry %2.', Comment = '%1 = HTTP status code, %2 = log entry no.';
+        FailedMsg: Label 'The request failed: %1 (log entry %2).', Comment = '%1 = error message, %2 = log entry no.';
+        NoLogEntryMsg: Label 'The request was processed but the log entry could not be written.';
 }
