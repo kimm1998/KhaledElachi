@@ -84,6 +84,7 @@ codeunit 80014 "Order Appr. Request Webhook"
 
         JData.Add('orderPaymentTerms', SalesHeader."Payment Terms Code");
         JData.Add('orderDueDate', Format(SalesHeader."Due Date", 0, 9));
+        JData.Add('requestReason', GetRequestReason(SalesHeader));
         JData.Add('entity', CompanyInfo."API Country");
 
         JObject.Add('authToken', '8f3c1a9d-6b72-4c5e-91a0-3d7f2c9e5b44');
@@ -92,6 +93,37 @@ codeunit 80014 "Order Appr. Request Webhook"
 
         JObject.WriteTo(JsonText);
         exit(JsonText);
+    end;
+
+    /// <summary>
+    /// Reason for the approval request, based on the same checks that block posting
+    /// (Sales Credit Limit Check -> ValidateCreditLimitExeed). SalesHeader is passed by value,
+    /// so the flags calculated here are never saved to the database.
+    /// </summary>
+    local procedure GetRequestReason(SalesHeader: Record "Sales Header"): Text
+    var
+        CreditLimitCheck: Codeunit "Sales Credit Limit Check";
+        Reason: Text;
+    begin
+        CreditLimitCheck.ValidateCreditLimitExeed(SalesHeader);
+
+        if SalesHeader."Overdue Exceeded" then
+            Reason := OverdueBalanceTxt;
+        if SalesHeader."Exposure Exceeds Credit Limit" then
+            Reason := AppendReason(Reason, ExposureExceedsTxt);
+        if SalesHeader."Balance Exceeds Credit Limit" then
+            Reason := AppendReason(Reason, BalanceExceedsTxt);
+
+        if Reason = '' then
+            Reason := ManualRequestTxt;
+        exit(Reason);
+    end;
+
+    local procedure AppendReason(Reason: Text; NewReason: Text): Text
+    begin
+        if Reason = '' then
+            exit(NewReason);
+        exit(Reason + '; ' + NewReason);
     end;
 
     /// <summary>
@@ -149,4 +181,10 @@ codeunit 80014 "Order Appr. Request Webhook"
         ApprovalEntryFilter.SetRange("Entry No.", ApprovalEntry."Entry No.");
         exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Approval Request Entries", ApprovalEntryFilter, true));
     end;
+
+    var
+        OverdueBalanceTxt: Label 'Overdue balance';
+        ExposureExceedsTxt: Label 'Exposure exceeds credit limit';
+        BalanceExceedsTxt: Label 'Balance exceeds credit limit';
+        ManualRequestTxt: Label 'Manual approval request';
 }
