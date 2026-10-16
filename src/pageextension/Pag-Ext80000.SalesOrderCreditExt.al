@@ -27,25 +27,25 @@ pageextension 80000 "Sales Order Credit Ext." extends "Sales Order"
                 }
             }
         }
-        addafter("Payment Terms Code")//installemnt
-        {
-            field("Installment Code"; Rec."Installment Code")
-            {
-                ApplicationArea = All;
-                Caption = 'Installment Code';
-                ToolTip = 'Specifies the installment schedule for this sale.';
-            }
-        }
-        modify("Payment Terms Code")//installemnt
-        {
-            trigger OnAfterValidate()
-            var
-                PaymentTerms: Record "Payment Terms";
-            begin
-                if PaymentTerms.Get(Rec."Payment Terms Code") then
-                    Rec."Installment Code" := PaymentTerms."Installment Code";
-            end;
-        }
+        // addafter("Payment Terms Code")//installemnt //toremove
+        // {
+        //     field("Installment Code"; Rec."Installment Code")
+        //     {
+        //         ApplicationArea = All;
+        //         Caption = 'Installment Code';
+        //         ToolTip = 'Specifies the installment schedule for this sale.';
+        //     }
+        // }
+        // modify("Payment Terms Code")//installemnt
+        // {
+        //     trigger OnAfterValidate()
+        //     var
+        //         PaymentTerms: Record "Payment Terms";
+        //     begin
+        //         if PaymentTerms.Get(Rec."Payment Terms Code") then
+        //             Rec."Installment Code" := PaymentTerms."Installment Code";
+        //     end;
+        // }
     }
 
     trigger OnAfterGetRecord()

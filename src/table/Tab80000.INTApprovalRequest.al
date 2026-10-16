@@ -53,6 +53,11 @@ table 80000 "INT Approval Request"
             Caption = 'Sales Document SystemId';
             DataClassification = SystemMetadata;
         }
+        field(15; "Performed By ID"; Text[50])
+        {
+            Caption = 'Performed By ID';
+            DataClassification = CustomerContent;
+        }
     }
 
     keys

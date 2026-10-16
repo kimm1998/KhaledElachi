@@ -30,7 +30,9 @@ pageextension 80007 "Posted Sales Invoices Ext" extends "Posted Sales Invoices"
                 var
                     CustLedgEntry: Record "Cust. Ledger Entry";
                     ApplyPage: Page "Apply Installment Terms";
+                    SalesSetup: Record "Sales & Receivables Setup";
                 begin
+                    // error('Please Contact your system administrator.');//to remove
                     if Rec."Installments Applied" then begin
                         Message('Installments have already been applied to invoice %1.', Rec."No.");
                         exit;

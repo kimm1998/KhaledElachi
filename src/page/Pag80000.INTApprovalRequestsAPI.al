@@ -21,6 +21,7 @@ page 80000 "INT Approval Requests API"
                 field(documentType; Rec."Document Type") { Caption = 'documentType'; }
                 field(documentNo; Rec."Document No.") { Caption = 'documentNo'; }
                 field(status; Rec.Status) { Caption = 'status'; }
+                field(PerformedBy; Rec."Performed By ID") { Caption = 'PerformedBy'; }
                 field(createdAt; Rec."Created At") { Caption = 'createdAt'; }
                 field(processedAt; Rec."Processed At") { Caption = 'processedAt'; }
                 field(lastError; Rec."Last Error") { Caption = 'lastError'; }

@@ -39,6 +39,14 @@ codeunit 80012 Subscribers
 
     end;
 
+    [EventSubscriber(ObjectType::Table, database::"Assembly Header", 'OnBeforeUpdateAssemblyLinesAndVerifyReserveQuantity', '', false, false)]
+
+    local procedure OnBeforeUpdateAssemblyLinesAndVerifyReserveQuantity(var IsHandled: Boolean; var xAssemblyHeader: Record "Assembly Header")//assmenly
+    begin
+        if xAssemblyHeader.Quantity <> 0 then
+            IsHandled := true;
+    end;
+
     var
         myInt: Integer;
 }

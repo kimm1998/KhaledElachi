@@ -21,6 +21,7 @@ tableextension 80007 SalesSetupExt extends "Sales & Receivables Setup"
             tableRelation = "G/L Account"."No.";
             DataClassification = ToBeClassified;
         }
+
     }
 
     keys

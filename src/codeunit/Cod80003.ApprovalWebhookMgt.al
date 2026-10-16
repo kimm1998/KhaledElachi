@@ -91,9 +91,21 @@ codeunit 80003 "Approval Webhook Mgt."
         JObject.Add('authToken', '8f3c1a9d-6b72-4c5e-91a0-3d7f2c9e5b44');
         JObject.Add('orderNo', ApprovalEntry."Document No.");
         JObject.Add('approver', ApprovalEntry."Approver ID");
+        JObject.Add('performedBy', GetPerformedByUserId(ApprovalEntry."Document No."));
         JObject.Add('entity', compinfo."API Country");
 
         JObject.WriteTo(JsonText);
         exit(JsonText);
+    end;
+
+    local Procedure GetPerformedByUserId(DocumentNo: Code[20]): Text
+    var
+        INTApproval: Record "INT Approval Request";
+    begin
+        intApproval.SetRange("Document No.", DocumentNo);
+        if intApproval.FindLast() then
+            exit(intApproval."Performed By ID");
+        exit('');
+
     end;
 }

@@ -125,7 +125,6 @@ codeunit 80010 "Installment Journal Mgt."
         if not OrigCLE.FindFirst() then
             Error('Original customer ledger entry for invoice %1 was not found.', InvoiceNo);
 
-        // Close installment entries using standard journal posting
         if RemainingSubTotal <> 0 then begin
             EnsureInstallmentJournal();
             ClearInstallmentJournalLines();
@@ -133,21 +132,6 @@ codeunit 80010 "Installment Journal Mgt."
             InsertResetReopenOriginalLine(OrigCLE, SalesInvHeader, RemainingSubTotal);
             PostInstallmentJournalLines();
         end;
-
-        // Delete sub-entry invoice CLEs only after their balance has been closed
-        SubCLE.SetRange("Customer No.", CustomerNo);
-        SubCLE.SetFilter("Document No.", InvoiceNo + '-I*');
-        SubCLE.SetRange("Document Type", SubCLE."Document Type"::Invoice);
-        if SubCLE.FindSet() then
-            repeat
-                SubDCLE.SetRange("Cust. Ledger Entry No.", SubCLE."Entry No.");
-                SubDCLE.DeleteAll();
-            until SubCLE.Next() = 0;
-
-        SubCLE.SetRange("Customer No.", CustomerNo);
-        SubCLE.SetFilter("Document No.", InvoiceNo + '-I*');
-        SubCLE.SetRange("Document Type", SubCLE."Document Type"::Invoice);
-        SubCLE.DeleteAll();
 
         OrigCLE."Original Posted Amount" := 0;
         OrigCLE."Original Posted Amount (LCY)" := 0;
@@ -288,7 +272,7 @@ codeunit 80010 "Installment Journal Mgt."
         GenJnlLine."Account No." := OrigCLE."Customer No.";
 
         SetJournalCurrencyFromCustLedger(GenJnlLine, OrigCLE);
-        genjnlline.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
+        
         genjnlline.Validate("Salespers./Purch. Code", OrigCLE."Salesperson Code");
         GenJnlLine.validate("External Document No.", OrigCLE."External Document No.");
         GenJnlLine.Validate(Amount, -RemainingAmount);
@@ -298,6 +282,8 @@ codeunit 80010 "Installment Journal Mgt."
         GenJnlLine."Bal. Account No." := GetClearingAccountNo(SalesInvHeader);
         GenJnlLine.Description := CopyStr(StrSubstNo('Close invoice %1 for installment split', SalesInvHeader."No."), 1, 100);
         GenJnlLine.Insert(true);
+        genjnlline.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
+        GenJnlLine.Modify();
     end;
 
     local procedure InsertInstallmentJournalLine(
@@ -321,7 +307,6 @@ codeunit 80010 "Installment Journal Mgt."
         GenJnlLine."Account No." := OrigCLE."Customer No.";
 
         SetJournalCurrencyFromCustLedger(GenJnlLine, OrigCLE);
-        genjnlline.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
         genjnlline.Validate("Salespers./Purch. Code", OrigCLE."Salesperson Code");
         GenJnlLine.validate("External Document No.", OrigCLE."External Document No.");
         GenJnlLine.Validate(Amount, InstallmentAmount);
@@ -331,6 +316,8 @@ codeunit 80010 "Installment Journal Mgt."
         GenJnlLine.Description := CopyStr(
             StrSubstNo('Installment %1/%2 - %3', InstallmentNo, TotalInstallments, SalesInvHeader."No."), 1, 100);
         GenJnlLine.Insert(true);
+        genjnlline.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
+        GenJnlLine.Modify();
     end;
 
     local procedure InsertResetClosingLineForInstallments(InvoiceNo: Code[20]; CustomerNo: Code[20]; SalesInvHeader: Record "Sales Invoice Header")
@@ -355,7 +342,7 @@ codeunit 80010 "Installment Journal Mgt."
                     GenJnlLine."Account No." := CustomerNo;
 
                     SetJournalCurrencyFromCustLedger(GenJnlLine, SubCLE);
-                    GenJnlLine.Validate("Dimension Set ID", SubCLE."Dimension Set ID");
+                    
                     GenJnlLine.Validate("Salespers./Purch. Code", SubCLE."Salesperson Code");
                     GenJnlLine.Validate("External Document No.", SubCLE."External Document No.");
                     GenJnlLine.Validate(Amount, -SubCLE."Remaining Amount");
@@ -365,6 +352,8 @@ codeunit 80010 "Installment Journal Mgt."
                     GenJnlLine."Bal. Account No." := GetClearingAccountNo(SalesInvHeader);
                     GenJnlLine.Description := CopyStr(StrSubstNo('Reset installment %1', SubCLE."Document No."), 1, 100);
                     GenJnlLine.Insert(true);
+                    GenJnlLine.Validate("Dimension Set ID", SubCLE."Dimension Set ID");
+                    GenJnlLine.Modify();
                 end;
             until SubCLE.Next() = 0;
     end;
@@ -386,7 +375,7 @@ codeunit 80010 "Installment Journal Mgt."
 
         // SetJournalCurrencyFromCustLedger(GenJnlLine, OrigCLE);//recheck
         genjnlline.Validate("Currency Code", OrigCLE."Currency Code");//recheck
-        GenJnlLine.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
+        
         GenJnlLine.Validate("Salespers./Purch. Code", OrigCLE."Salesperson Code");
         GenJnlLine.validate("External Document No.", OrigCLE."External Document No.");
         GenJnlLine.Validate(Amount, RemainingSubTotal);
@@ -395,6 +384,8 @@ codeunit 80010 "Installment Journal Mgt."
         GenJnlLine."Bal. Account No." := GetClearingAccountNo(salesInvHeader);
         GenJnlLine.Description := CopyStr(StrSubstNo('Restore invoice %1', SalesInvHeader."No."), 1, 100);
         GenJnlLine.Insert(true);
+        GenJnlLine.Validate("Dimension Set ID", OrigCLE."Dimension Set ID");
+        GenJnlLine.Modify();
     end;
 
     local procedure StampOriginalPostedAmounts(InvoiceNo: Code[20]; CustomerNo: Code[20]; OriginalAmount: Decimal; OriginalAmountLCY: Decimal)

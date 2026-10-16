@@ -25,7 +25,8 @@ pageextension 80006 "Posted Sales Invoice Ext" extends "Posted Sales Invoice"
             {
                 ApplicationArea = All;
                 Caption = 'Installment Schedule';
-                Visible = ShowInstallmentFactBox;
+                // Visible = ShowInstallmentFactBox;
+                visible = false; //to remove
             }
         }
     }
@@ -49,7 +50,10 @@ pageextension 80006 "Posted Sales Invoice Ext" extends "Posted Sales Invoice"
                 var
                     CustLedgEntry: Record "Cust. Ledger Entry";
                     ApplyPage: Page "Apply Installment Terms";
+                    SalesSetup: Record "Sales & Receivables Setup";
                 begin
+
+                    // error('Please Contact your system administrator.');//to remove
                     CustLedgEntry.SetRange("Document Type", CustLedgEntry."Document Type"::Invoice);
                     CustLedgEntry.SetRange("Document No.", Rec."No.");
                     CustLedgEntry.SetRange("Customer No.", Rec."Sell-to Customer No.");
@@ -85,7 +89,10 @@ pageextension 80006 "Posted Sales Invoice Ext" extends "Posted Sales Invoice"
                 trigger OnAction()
                 var
                     InstallmentApply: Codeunit "Installment Apply to Posted";
+                    SalesSetup: Record "Sales & Receivables Setup";
                 begin
+
+                    // error('Please Contact your system administrator.');//to remove
                     if not Confirm(
                         'Reset installments for invoice %1?  This will remove all installment entries and restore the original single payment entry.  This is only allowed if no installments have been paid yet.  Continue?',
                         false, Rec."No.")
@@ -109,7 +116,10 @@ pageextension 80006 "Posted Sales Invoice Ext" extends "Posted Sales Invoice"
                 var
                     LogPage: Page "Installment Application Log";
                     LogEntry: Record "Installment Application Log";
+                    SalesSetup: Record "Sales & Receivables Setup";
                 begin
+
+                    // error('Please Contact your system administrator.');//to remove
                     LogEntry.SetRange("Document No.", Rec."No.");
                     LogPage.SetTableView(LogEntry);
                     LogPage.Run();
