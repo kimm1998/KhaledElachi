@@ -84,30 +84,35 @@ table 80010 "Approval Webhook Log"
     end;
 
     procedure GetRequestBody(): Text
+    var
+        InStr: InStream;
     begin
         CalcFields("Request Body");
-        exit(ReadBlob("Request Body"));
+        if not "Request Body".HasValue() then
+            exit('');
+        "Request Body".CreateInStream(InStr, TextEncoding::UTF8);
+        exit(ReadStream(InStr));
     end;
 
     procedure GetResponseBody(): Text
-    begin
-        CalcFields("Response Body");
-        exit(ReadBlob("Response Body"));
-    end;
-
-    local procedure ReadBlob(var BlobField: Blob): Text
     var
         InStr: InStream;
+    begin
+        CalcFields("Response Body");
+        if not "Response Body".HasValue() then
+            exit('');
+        "Response Body".CreateInStream(InStr, TextEncoding::UTF8);
+        exit(ReadStream(InStr));
+    end;
+
+    local procedure ReadStream(var InStr: InStream): Text
+    var
         Line: Text;
         Result: Text;
         NewLine: Text[2];
     begin
-        if not BlobField.HasValue() then
-            exit('');
-
         NewLine[1] := 13;
         NewLine[2] := 10;
-        BlobField.CreateInStream(InStr, TextEncoding::UTF8);
         while not InStr.EOS() do begin
             InStr.ReadText(Line);
             if Result <> '' then
