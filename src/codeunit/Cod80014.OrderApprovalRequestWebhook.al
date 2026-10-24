@@ -6,7 +6,7 @@ codeunit 80014 "Order Appr. Request Webhook"
 
     Permissions = tabledata "Approval Webhook Log" = RIMD;
 
-    [EventSubscriber(ObjectType::Table, Database::"Approval Entry", 'OnAfterInsertEvent', '', false, false)]
+        [EventSubscriber(ObjectType::Table, Database::"Approval Entry", 'OnAfterInsertEvent', '', false, false)]
     local procedure OnAfterInsertApprovalEntry(var Rec: Record "Approval Entry"; RunTrigger: Boolean)
     var
         SalesHeader: Record "Sales Header";
@@ -18,13 +18,33 @@ codeunit 80014 "Order Appr. Request Webhook"
             exit;
         if Rec."Document Type" <> Rec."Document Type"::Order then
             exit;
-        // Only the approver who currently has to act (Open); not the queued (Created) ones.
-        if Rec.Status <> Rec.Status::Open then
+        // One call per approval request, not per approver
+        if IsFollowUpEntryOfSameRequest(Rec) then
             exit;
         if not SalesHeader.Get(SalesHeader."Document Type"::Order, Rec."Document No.") then
             exit;
 
         LogEntryNo := Dispatch(SalesHeader, Rec, Enum::"Approval Webhook Trigger"::Automatic);
+    end;
+
+    /// <summary>
+    /// True when an earlier approval entry for the same document was created by the same
+    /// workflow instance, i.e. the webhook was already sent for this approval request.
+    /// A new request (for example after a rejection) has a new workflow instance, so it is sent again.
+    /// </summary>
+    local procedure IsFollowUpEntryOfSameRequest(ApprovalEntry: Record "Approval Entry"): Boolean
+    var
+        PrevEntry: Record "Approval Entry";
+    begin
+        PrevEntry.SetRange("Table ID", ApprovalEntry."Table ID");
+        PrevEntry.SetRange("Document Type", ApprovalEntry."Document Type");
+        PrevEntry.SetRange("Document No.", ApprovalEntry."Document No.");
+        PrevEntry.SetFilter("Entry No.", '<%1', ApprovalEntry."Entry No.");
+        if not IsNullGuid(ApprovalEntry."Workflow Step Instance ID") then
+            PrevEntry.SetRange("Workflow Step Instance ID", ApprovalEntry."Workflow Step Instance ID")
+        else
+            PrevEntry.SetRange(Status, PrevEntry.Status::Created, PrevEntry.Status::Open);
+        exit(not PrevEntry.IsEmpty());
     end;
 
     /// <summary>
@@ -183,9 +203,11 @@ codeunit 80014 "Order Appr. Request Webhook"
             Customer.CalcFields("Balance Due (LCY)");
             JData.Add('customerOverdueAmount', Format(Customer."Balance Due (LCY)", 0, 9));
             JData.Add('customerTotalExposure', Format(CreditLimitMgmt.CalcExposureLCY(CustomerNo), 0, 9));
+            JData.add('customerCreditLimit', Format(Customer."Credit Limit (LCY)"));
         end else begin
             JData.Add('customerOverdueAmount', '0');
             JData.Add('customerTotalExposure', '0');
+            JData.add('customerCreditLimit', '0');
         end;
 
         JData.Add('orderPaymentTerms', SalesHeader."Payment Terms Code");
@@ -223,8 +245,8 @@ codeunit 80014 "Order Appr. Request Webhook"
             Reason := OverdueBalanceTxt;
         if SalesHeader."Exposure Exceeds Credit Limit" then
             Reason := AppendReason(Reason, ExposureExceedsTxt);
-        if SalesHeader."Balance Exceeds Credit Limit" then
-            Reason := AppendReason(Reason, BalanceExceedsTxt);
+        // if SalesHeader."Balance Exceeds Credit Limit" then
+        //     Reason := AppendReason(Reason, BalanceExceedsTxt);
 
         if Reason = '' then
             Reason := ManualRequestTxt;
@@ -287,19 +309,62 @@ codeunit 80014 "Order Appr. Request Webhook"
     /// Direct web client link to the approval request entry, so the approver can approve straight away.
     /// When there is no approval entry (manual test) it falls back to the sales order page.
     /// </summary>
+    // local procedure GetApprovalLink(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
+    // var
+    //     ApprovalEntryFilter: Record "Approval Entry";
+    //     SalesHeaderFilter: Record "Sales Header";
+    // begin
+    //     if ApprovalEntry."Entry No." = 0 then begin
+    //         SalesHeaderFilter.SetRange("Document Type", SalesHeader."Document Type");
+    //         SalesHeaderFilter.SetRange("No.", SalesHeader."No.");
+    //         if SalesHeaderFilter.FindFirst() then
+    //             exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Sales Order", SalesHeaderFilter, true));
+    //     end;
+
+    //     ApprovalEntryFilter.SetRange("Entry No.", ApprovalEntry."Entry No.");
+    //     if ApprovalEntryFilter.FindFirst() then
+    //         exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Approval Request Entries", ApprovalEntryFilter, true));
+    //     exit(''); // Fallback if no approval entry is found
+    // end;
     local procedure GetApprovalLink(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
     var
-        ApprovalEntryFilter: Record "Approval Entry";
-        SalesHeaderFilter: Record "Sales Header";
+        SalesHeaderRec: Record "Sales Header";
+        ApprovalEntryRec: Record "Approval Entry";
+        PageManagement: Codeunit "Page Management";
+        EntryNoFilterTok: Label '''Entry No.'' IS ''%1''', Locked = true;
     begin
+        // No approval entry: link directly to the sales document itself
         if ApprovalEntry."Entry No." = 0 then begin
-            SalesHeaderFilter.SetRange("Document Type", SalesHeader."Document Type");
-            SalesHeaderFilter.SetRange("No.", SalesHeader."No.");
-            exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Sales Order", SalesHeaderFilter, true));
+            if not SalesHeaderRec.Get(SalesHeader."Document Type", SalesHeader."No.") then
+                exit('');
+            // UseFilters = false -> bookmark link that opens this exact record
+            // GetPageID picks the right card page (Sales Order, Sales Quote, Sales Invoice, ...)
+            exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page,
+                PageManagement.GetPageID(SalesHeaderRec), SalesHeaderRec, false));
         end;
 
-        ApprovalEntryFilter.SetRange("Entry No.", ApprovalEntry."Entry No.");
-        exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Approval Request Entries", ApprovalEntryFilter, true));
+        // Approval entry: link to the Approval Request Entries list filtered on the entry
+        if not ApprovalEntryRec.Get(ApprovalEntry."Entry No.") then
+            exit(''); // Fallback if no approval entry is found
+
+        exit(BuildFilteredPageUrl(Page::"Approval Request Entries",
+            StrSubstNo(EntryNoFilterTok, Format(ApprovalEntryRec."Entry No.", 0, 9))));
+    end;
+
+    local procedure BuildFilteredPageUrl(PageId: Integer; FilterTxt: Text): Text
+    var
+        TypeHelper: Codeunit "Type Helper";
+        EncodedFilter: Text;
+        test: Text;
+    begin
+        // UrlEncode encodes spaces as '+', which BC doesn't decode inside filters -> use %20
+        // (a literal '+' is already encoded as %2B, so this replace is safe)
+        EncodedFilter := TypeHelper.UrlEncode(FilterTxt).Replace('+', '%20');
+        test := GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, PageId)
+            + '&filter=' + EncodedFilter;
+        // GetUrl already returns "...?company=...&page=<id>", so append the filter with '&'
+        exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, PageId)
+            + '&filter=' + EncodedFilter);
     end;
 
     var
