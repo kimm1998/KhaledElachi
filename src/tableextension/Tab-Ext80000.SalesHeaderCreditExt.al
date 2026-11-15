@@ -7,15 +7,11 @@ tableextension 80000 "Sales Header Credit Ext." extends "Sales Header"
             Caption = 'Returns Not Invoiced (LCY)';
             FieldClass = FlowField;
             Editable = false;
-
-            // Best-effort: open sales credit memo lines (not posted yet).
-            // NOTE: Sales Line stores "Amount" (document currency). "Amount (LCY)" exists in some versions; to be safe we sum "Amount".
-            // If your environment has "Amount (LCY)" on Sales Line, change CalcFormula to sum that instead.
+            // Sums "Amount" (document currency) on open credit memo lines; use "Amount (LCY)" if your version has it.
             CalcFormula = sum("Sales Line".Amount where(
                 "Document Type" = const("Credit Memo"),
-                "Bill-to Customer No." = field("No."),
-                "Outstanding Quantity" = filter(<> 0)
-            ));
+                "Bill-to Customer No." = field("Bill-to Customer No."),
+                "Outstanding Quantity" = filter(<> 0)));
         }
         field(80001; "Exposure (LCY)"; Decimal)
         {
@@ -28,11 +24,10 @@ tableextension 80000 "Sales Header Credit Ext." extends "Sales Header"
         field(80002; "Credit Limit"; Decimal)
         {
             Caption = 'Credit Limit (LCY)';
-            // DataClassification = CustomerContent;
             Editable = false;
             DecimalPlaces = 2 : 2;
             FieldClass = FlowField;
-            CalcFormula = lookup("Customer"."Credit Limit (LCY)" where("No." = field("Bill-to Customer No.")));
+            CalcFormula = lookup(Customer."Credit Limit (LCY)" where("No." = field("Bill-to Customer No.")));
         }
         field(80003; "Customer Balance"; Decimal)
         {
@@ -45,47 +40,49 @@ tableextension 80000 "Sales Header Credit Ext." extends "Sales Header"
         field(80004; "Balance Exceeds Credit Limit"; Boolean)
         {
             Caption = 'Balance Exceeds Credit Limit';
+            DataClassification = CustomerContent;
             Editable = false;
         }
         field(80005; "Exposure Exceeds Credit Limit"; Boolean)
         {
             Caption = 'Exposure Exceeds Credit Limit';
+            DataClassification = CustomerContent;
             Editable = false;
         }
         field(80006; "Overdue Exceeded"; Boolean)
         {
             Caption = 'Overdue Exceeded';
+            DataClassification = CustomerContent;
             Editable = false;
         }
         field(80007; "Customer Overdue Balance"; Decimal)
         {
-            Caption = 'Customer Balance (LCY)';
+            Caption = 'Customer Overdue Balance (LCY)';
+            DataClassification = CustomerContent;
             Editable = false;
             DecimalPlaces = 2 : 2;
-            // FieldClass = FlowField;
-            // CalcFormula = sum("Detailed Cust. Ledg. Entry"."Amount (LCY)" where("Customer No." = field("Bill-to Customer No."), "Initial Entry Due Date" = field(upperlimit(workdate))));
         }
         field(80009; Exposure; Decimal)
         {
             Caption = 'Exposure (LCY)';
+            DataClassification = CustomerContent;
             Editable = false;
         }
-        field(80010; "Installment Code"; Code[20])//installemnt
+        field(80010; "Installment Code"; Code[20])
         {
             Caption = 'Installment Code';
-            TableRelation = "Installment Payment Terms".Code;
             DataClassification = CustomerContent;
+            TableRelation = "Installment Payment Terms".Code;
         }
         field(80011; "Outstanding Amount LCY"; Decimal)
         {
             Caption = 'Outstanding Amount (LCY)';
             Editable = false;
             DecimalPlaces = 2 : 2;
-            CalcFormula = sum("Sales Line"."Outstanding Amount (LCY)" where("Document Type" = field("Document Type"),
-                                                                      "Document No." = field("No.")));
             FieldClass = FlowField;
+            CalcFormula = sum("Sales Line"."Outstanding Amount (LCY)" where(
+                "Document Type" = field("Document Type"),
+                "Document No." = field("No.")));
         }
-
-
     }
 }

@@ -212,6 +212,8 @@ codeunit 80014 "Order Appr. Request Webhook"
 
         JData.Add('orderPaymentTerms', SalesHeader."Payment Terms Code");
         JData.Add('orderDueDate', Format(SalesHeader."Due Date", 0, 9));
+        JData.Add('conversionRateLCYtoEUR', Format(GetLcyRate('EUR'), 0, 9));
+        JData.Add('conversionRateLCYtoUSD', Format(GetLcyRate('USD'), 0, 9));
         JData.Add('requestReason', GetRequestReason(SalesHeader));
         JData.Add('entity', CompanyInfo."API Country");
 
@@ -303,6 +305,21 @@ codeunit 80014 "Order Appr. Request Webhook"
             exit(SalesHeader."Currency Code");
         GLSetup.Get();
         exit(GLSetup."LCY Code");
+    end;
+
+    /// <summary>
+    /// Units of the given currency per 1 LCY, using the latest exchange rate on or before today.
+    /// Returns 1 when the currency is the LCY itself, and 0 when no rate exists.
+    /// </summary>
+    local procedure GetLcyRate(CurrencyCode: Code[10]): Decimal
+    var
+        GLSetup: Record "General Ledger Setup";
+        CurrExchRate: Record "Currency Exchange Rate";
+    begin
+        GLSetup.Get();
+        if GLSetup."LCY Code" = CurrencyCode then
+            exit(1);
+        exit(CurrExchRate.ExchangeRate(Today(), CurrencyCode));
     end;
 
     /// <summary>
