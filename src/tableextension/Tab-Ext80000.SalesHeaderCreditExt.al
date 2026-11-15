@@ -76,6 +76,15 @@ tableextension 80000 "Sales Header Credit Ext." extends "Sales Header"
             TableRelation = "Installment Payment Terms".Code;
             DataClassification = CustomerContent;
         }
+        field(80011; "Outstanding Amount LCY"; Decimal)
+        {
+            Caption = 'Outstanding Amount (LCY)';
+            Editable = false;
+            DecimalPlaces = 2 : 2;
+            CalcFormula = sum("Sales Line"."Outstanding Amount (LCY)" where("Document Type" = field("Document Type"),
+                                                                      "Document No." = field("No.")));
+            FieldClass = FlowField;
+        }
 
 
     }

@@ -6,7 +6,7 @@ codeunit 80014 "Order Appr. Request Webhook"
 
     Permissions = tabledata "Approval Webhook Log" = RIMD;
 
-        [EventSubscriber(ObjectType::Table, Database::"Approval Entry", 'OnAfterInsertEvent', '', false, false)]
+    [EventSubscriber(ObjectType::Table, Database::"Approval Entry", 'OnAfterInsertEvent', '', false, false)]
     local procedure OnAfterInsertApprovalEntry(var Rec: Record "Approval Entry"; RunTrigger: Boolean)
     var
         SalesHeader: Record "Sales Header";
@@ -326,6 +326,31 @@ codeunit 80014 "Order Appr. Request Webhook"
     //         exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page, Page::"Approval Request Entries", ApprovalEntryFilter, true));
     //     exit(''); // Fallback if no approval entry is found
     // end;
+    // local procedure GetApprovalLink(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
+    // var
+    //     SalesHeaderRec: Record "Sales Header";
+    //     ApprovalEntryRec: Record "Approval Entry";
+    //     PageManagement: Codeunit "Page Management";
+    //     EntryNoFilterTok: Label '''Entry No.'' IS ''%1''', Locked = true;
+    // begin
+    //     // No approval entry: link directly to the sales document itself
+    //     if ApprovalEntry."Entry No." = 0 then begin
+    //         if not SalesHeaderRec.Get(SalesHeader."Document Type", SalesHeader."No.") then
+    //             exit('');
+    //         // UseFilters = false -> bookmark link that opens this exact record
+    //         // GetPageID picks the right card page (Sales Order, Sales Quote, Sales Invoice, ...)
+    //         exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page,
+    //             PageManagement.GetPageID(SalesHeaderRec), SalesHeaderRec, false));
+    //     end;
+
+    //     // Approval entry: link to the Approval Request Entries list filtered on the entry
+    //     if not ApprovalEntryRec.Get(ApprovalEntry."Entry No.") then
+    //         exit(''); // Fallback if no approval entry is found
+
+    //     exit(BuildFilteredPageUrl(Page::"Approval Request Entries",
+    //         StrSubstNo(EntryNoFilterTok, Format(ApprovalEntryRec."Entry No.", 0, 9))));
+    // end;
+
     local procedure GetApprovalLink(SalesHeader: Record "Sales Header"; ApprovalEntry: Record "Approval Entry"): Text
     var
         SalesHeaderRec: Record "Sales Header";
@@ -333,22 +358,10 @@ codeunit 80014 "Order Appr. Request Webhook"
         PageManagement: Codeunit "Page Management";
         EntryNoFilterTok: Label '''Entry No.'' IS ''%1''', Locked = true;
     begin
-        // No approval entry: link directly to the sales document itself
-        if ApprovalEntry."Entry No." = 0 then begin
-            if not SalesHeaderRec.Get(SalesHeader."Document Type", SalesHeader."No.") then
-                exit('');
-            // UseFilters = false -> bookmark link that opens this exact record
-            // GetPageID picks the right card page (Sales Order, Sales Quote, Sales Invoice, ...)
-            exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page,
-                PageManagement.GetPageID(SalesHeaderRec), SalesHeaderRec, false));
-        end;
-
-        // Approval entry: link to the Approval Request Entries list filtered on the entry
-        if not ApprovalEntryRec.Get(ApprovalEntry."Entry No.") then
-            exit(''); // Fallback if no approval entry is found
-
-        exit(BuildFilteredPageUrl(Page::"Approval Request Entries",
-            StrSubstNo(EntryNoFilterTok, Format(ApprovalEntryRec."Entry No.", 0, 9))));
+        if not SalesHeaderRec.Get(SalesHeader."Document Type", SalesHeader."No.") then
+            exit('');
+        exit(GetUrl(ClientType::Web, CompanyName(), ObjectType::Page,
+            PageManagement.GetPageID(SalesHeaderRec), SalesHeaderRec, false));
     end;
 
     local procedure BuildFilteredPageUrl(PageId: Integer; FilterTxt: Text): Text
